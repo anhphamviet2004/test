@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Phạm Việt Anh — Resume Rainbow (Interactive)</title>
+<style>
+  :root{
+    --dice-size:60px;
+    --pip-size:10px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:Inter,Arial,sans-serif;
+    background:#060606;
+    color:#fff;
+    overflow:hidden;
+  }
+
+  /* ---------- Background rainbow (soft, behind everything) ---------- */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background: linear-gradient(45deg,#ff004d,#ff7a00,#ffd300,#00d100,#00e5ff,#3b22ff,#ff00c8);
+    background-size: 800% 800%;
+    animation: bgMove 22s ease infinite;
+    filter: blur(42px) saturate(120%);
+    z-index: -30;
+  }
+  @keyframes bgMove { 0%{background-position:0% 50%} 50%{background-position:50% 50%} 100%{background-position:100% 50%} }
+
+  /* ---------- Audio visualizer canvas (center) ---------- */
+  #visualizer {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%,-50%);
+    width: 100%;
+    height: 180px;
+    z-index: 2; /* below card (10) and dice (8) but above bg */
+    pointer-events: none;
+    mix-blend-mode: screen;
+    opacity: 0.95;
+  }
+
+  /* ---------- Cover + Profile card ---------- */
+  .cover {
+    width:100%;
+    height:220px;
+    background: center/cover no-repeat url("cover.jpg");
+    border-bottom: 4px solid rgba(255,255,255,0.06);
+    z-index: 1;
+  }
+
+  .card-wrap{
+    position: relative;
+    z-index: 10;
+    max-width: 950px;
+    margin: -110px auto 30px;
+    padding: 18px;
+  }
+
+  .profile-card{
+    background: linear-gradient(180deg, rgba(10,10,10,0.7), rgba(0,0,0,0.55));
+    border-radius: 18px;
+    padding: 18px;
+    display:flex;
+    gap:18px;
+    align-items:center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+    border: 3px solid rgba(255,255,255,0.03);
+  }
+
+  .profile-left{
+    width:160px; flex: 0 0 160px;
+  }
+  .avatar {
+    width:160px;height:160px;border-radius:12px;overflow:hidden;
+    border:4px solid rgba(255,255,255,0.06);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+    background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  }
+  .avatar img{width:100%;height:100%;object-fit:cover;display:block}
+
+  .profile-right{flex:1;text-align:left}
+  .name{font-size:28px;font-weight:700; margin-bottom:6px; color: #ffd700; text-shadow:0 3px 14px rgba(0,0,0,0.6)}
+  .subtitle{opacity:0.9;margin-bottom:8px}
+  .contact-chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{
+    background: linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.04);font-size:14px
+  }
+
+  /* neon rainbow border around card */
+  .profile-card::before{
+    content:"";
+    position:absolute;inset: -2px;
+    margin:auto;pointer-events:none;
+    background: conic-gradient(from 0deg,#ff004d,#ff7a00,#ffd300,#00d100,#00e5ff,#3b22ff,#ff00c8);
+    filter: blur(10px) saturate(120%);opacity:0.9;
+    z-index: -1;border-radius:22px;
+  }
+
+  /* ---------- Controls: Play, Lang ---------- */
+  .controls{
+    position:fixed; top:12px; left:12px; display:flex; gap:8px; z-index: 40;
+  }
+  .controls-right{
+    position:fixed; top:12px; right:12px; display:flex; gap:8px; z-index:40;
+  }
+  .btn{
+    background: rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.08);
+    padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:700;
+    backdrop-filter: blur(4px);
+  }
+  .btn.rainbow{
+    background: linear-gradient(90deg,#ff004d,#ff7a00,#ffd300,#00d100,#00e5ff,#3b22ff,#ff00c8);
+    color:#111;
+    padding:8px 14px;
+  }
+
+  /* ---------- CV / Contact buttons inside card ---------- */
+  .card-actions{margin-top:12px; display:flex; gap:10px; flex-wrap:wrap}
+  .cv-btn{ padding:10px 16px; border-radius:999px; text-decoration:none; font-weight:800;
+    background: linear-gradient(90deg,#ff9a9e,#fad0c4,#fad390); color:#111; box-shadow:0 8px 24px rgba(0,0,0,0.4)}
+  .contact-btn{ padding:10px 16px; border-radius:999px; text-decoration:none; font-weight:800;
+    background: linear-gradient(90deg,#ff004d,#ff7a00,#ffd300,#00d100,#00e5ff,#3b22ff,#ff00c8); color:#fff; box-shadow:0 8px 24px rgba(0,0,0,0.4)}
+
+  /* ---------- Dice (higher z so visible above canvas) ---------- */
+  .dice{
+    position:absolute; width:var(--dice-size); height:var(--dice-size); transform-style:preserve-3d; z-index:8;
+  }
+  .face{
+    position:absolute; width:var(--dice-size); height:var(--dice-size);
+    background:white; border:2px solid #222; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.45);
+  }
+  .pip{
+    position:absolute; width:var(--pip-size); height:var(--pip-size); border-radius:50%; background:#111;
+    box-shadow: 0 2px 0 rgba(255,255,255,0.15) inset;
+  }
+  /* pip positions tuned for 60px dice */
+  .tl{ top:8px; left:8px }
+  .tr{ top:8px; right:8px }
+  .bl{ bottom:8px; left:8px }
+  .br{ bottom:8px; right:8px }
+  .center{ top:50%; left:50%; transform: translate(-50%,-50%) }
+  .ml{ top:50%; left:8px; transform: translateY(-50%) }
+  .mr{ top:50%; right:8px; transform: translateY(-50%) }
+  .tm{ top:8px; left:50%; transform: translateX(-50%) }
+  .bm{ bottom:8px; left:50%; transform: translateX(-50%) }
+
+  /* face transforms for cube */
+  .front{ transform: rotateY(0deg) translateZ(calc(var(--dice-size) / 2)) }
+  .back{ transform: rotateY(180deg) translateZ(calc(var(--dice-size) / 2)) }
+  .right{ transform: rotateY(90deg) translateZ(calc(var(--dice-size) / 2)) }
+  .left{ transform: rotateY(-90deg) translateZ(calc(var(--dice-size) / 2)) }
+  .top{ transform: rotateX(90deg) translateZ(calc(var(--dice-size) / 2)) }
+  .bottom{ transform: rotateX(-90deg) translateZ(calc(var(--dice-size) / 2)) }
+
+  /* cube spin (slight) */
+  @keyframes cubeSpin { from{ transform: rotateX(0) rotateY(0)} to{ transform: rotateX(360deg) rotateY(360deg)} }
+  .dice .cubeAnim{ animation: cubeSpin 8s linear infinite }
+
+  /* ---------- Snow (dots to big flake) ---------- */
+  .snow-dot{
+    position: absolute; top:-10px; width:8px; height:8px; border-radius:50%; background:#fff; z-index:5;
+    opacity:0.92; pointer-events:none;
+  }
+  .bigflake{
+    position:absolute; z-index:5; font-size:48px; color:white; pointer-events:none; text-shadow:0 6px 20px rgba(0,0,0,0.4)
+  }
+
+  /* ---------- Footer fixed ---------- */
+  footer{
+    position:fixed; bottom:12px; left:50%; transform:translateX(-50%); z-index:30;
+    background: rgba(0,0,0,0.6); padding:8px 14px; border-radius:999px; border:1px solid rgba(255,255,255,0.06);
+    display:flex; gap:12px; align-items:center;
+  }
+  footer a{ color: white; text-decoration:none; font-weight:700 }
+
+  /* responsive small screens */
+  @media (max-width:720px){
+    .profile-card{ flex-direction:column; align-items:center; text-align:center }
+    .profile-left, .avatar{ width:120px; height:120px }
+    #visualizer{ height:120px }
+  }
+  @media print{
+    #visualizer, .controls, .dice, .snow-dot, .bigflake, footer { display:none !important; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Visualizer canvas -->
+  <canvas id="visualizer"></canvas>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button id="playBtn" class="btn">🎵 Play</button>
+  </div>
+  <div class="controls-right">
+    <button id="langBtn" class="btn">EN</button>
+  </div>
+
+  <!-- Cover -->
+  <div class="cover" role="img" aria-label="cover image"></div>
+
+  <!-- Profile card -->
+  <div class="card-wrap">
+    <div class="profile-card" id="profileCard">
+      <div class="profile-left">
+        <div class="avatar"><img id="avatarImg" src="14.jpg" alt="Avatar"></div>
+      </div>
+      <div class="profile-right">
+        <div class="name" id="name">Phạm Việt Anh</div>
+        <div class="subtitle" id="subtitle">Developer · Creative Coder · Casino Vibes</div>
+        <div class="contact-chips">
+          <div class="chip">📧 vietanh112004@gmail.com</div>
+          <div class="chip">📍 Hà Nội</div>
+          <div class="chip">🔗 GitHub / Portfolio</div>
+        </div>
+
+        <div class="card-actions">
+          <a class="cv-btn" id="cvBtn" href="Viet_Anh_resume_compressed.pdf" target="_blank">📄 Xem CV Canva</a>
+          <a class="contact-btn" id="contactBtn" href="mailto:vietanh112004@gmail.com">🌈 Liên hệ</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dice (3) -->
+  <div class="dice" id="dice1" aria-hidden="true"></div>
+  <div class="dice" id="dice2" aria-hidden="true"></div>
+  <div class="dice" id="dice3" aria-hidden="true"></div>
+
+  <!-- Footer -->
+  <footer>
+    <a href="mailto:vietanh112004@gmail.com">📧 Email</a>
+    <a href="https://www.facebook.com/VietAnh1124" target="_blank">📘 Facebook</a>
+  </footer>
+
+  <!-- Audio element (file: 1.mp3) -->
+  <audio id="audio" src="1.mp3" preload="auto" loop></audio>
+
+<script>
+/* ================= AUDIO + VISUALIZER SETUP ================= */
+const audioEl = document.getElementById('audio');
+const playBtn = document.getElementById('playBtn');
+const visualizer = document.getElementById('visualizer');
+const ctx = visualizer.getContext('2d');
+let audioCtx, analyser, sourceNode, dataArray, bufferLength, animationId;
+let playing = false;
+
+function resizeCanvas(){
+  visualizer.width = window.innerWidth;
+  visualizer.height = Math.max(120, Math.round(window.innerHeight * 0.22));
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function setupAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 1024;
+  bufferLength = analyser.frequencyBinCount;
+  dataArray = new Uint8Array(bufferLength);
+  sourceNode = audioCtx.createMediaElementSource(audioEl);
+  sourceNode.connect(analyser);
+  analyser.connect(audioCtx.destination);
+}
+
+/* draw visualizer: combined waveform + bass pulse (heart-like) */
+function drawVisualizer(){
+  animationId = requestAnimationFrame(drawVisualizer);
+  analyser.getByteFrequencyData(dataArray);
+
+  const w = visualizer.width;
+  const h = visualizer.height;
+  ctx.clearRect(0,0,w,h);
+
+  // compute bass energy (lower frequency bins)
+  let bass = 0;
+  const bassLimit = Math.floor(bufferLength * 0.15);
+  for (let i=0;i<bassLimit;i++) bass += dataArray[i];
+  bass = bass / (bassLimit * 255); // 0..1
+
+  // background glow / pulse based on bass
+  const glow = 40 + bass*80;
+  visualizer.style.filter = `blur(0px) saturate(${100 + bass*80}%)`;
+
+  // draw smooth waveform (line)
+  ctx.lineWidth = 3;
+  // color changes slowly with time for rainbow vibe
+  const hue = (Date.now() / 20) % 360;
+  ctx.strokeStyle = `hsl(${hue}, 95%, ${40 + bass*20}%)`;
+  ctx.beginPath();
+
+  const slice = w / bufferLength;
+  let x = 0;
+  for (let i=0;i<bufferLength;i++){
+    const v = dataArray[i] / 255; // 0..1
+    // shape into a heart-like band: amplify lower-mid frequencies
+    const y = h/2 + (Math.sin(i/3 + Date.now()/400) * 6) + ( (v - 0.2) * (h/2) * (0.8) );
+    if (i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    x += slice;
+  }
+  // close and stroke
+  ctx.lineTo(w, h/2);
+  ctx.stroke();
+
+  // draw mirrored soft glow (for thickness)
+  ctx.globalAlpha = 0.18;
+  ctx.lineWidth = 18;
+  ctx.strokeStyle = `hsla(${hue}, 95%, ${40 + bass*20}%, 0.4)`;
+  ctx.beginPath();
+  x=0;
+  for (let i=0;i<bufferLength;i++){
+    const v = dataArray[i] / 255;
+    const y = h/2 + (Math.sin(i/3 + Date.now()/400) * 6) + ( (v - 0.2) * (h/2) * (0.6) );
+    if (i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    x+=slice;
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 1.0;
+
+  // optional: small bars at bottom representing bass (heartbeat)
+  const barCount = 60;
+  const bw = w / barCount;
+  for (let i=0;i<barCount;i++){
+    const idx = Math.floor(i / barCount * bufferLength);
+    const v = dataArray[idx] / 255;
+    const bh = v * 60 * (1 + bass*3);
+    ctx.fillStyle = `hsla(${(hue + i*4)%360}, 95%, ${45 + bass*10}%, 0.7)`;
+    ctx.fillRect(i*bw, h - bh - 6, bw*0.8, bh);
+  }
+}
+
+/* Play/pause handling + init AudioContext on user gesture */
+playBtn.addEventListener('click', async ()=>{
+  try {
+    if (!audioCtx) setupAudio();
+    if (!playing) {
+      await audioCtx.resume();
+      await audioEl.play();
+      playBtn.textContent = "⏸ Pause";
+      if (!animationId) drawVisualizer();
+      playing = true;
+    } else {
+      audioEl.pause();
+      playBtn.textContent = "🎵 Play";
+      cancelAnimationFrame(animationId); animationId = null;
+      // clear canvas
+      ctx.clearRect(0,0,visualizer.width, visualizer.height);
+      playing = false;
+    }
+  } catch (e) {
+    console.warn('Play failed:', e);
+  }
+});
+
+/* ================= SNOW: small dots -> big ❄ ================= */
+const spawnRateMs = 200; // density
+function spawnSnowDot(){
+  const dot = document.createElement('div');
+  dot.className = 'snow-dot';
+  const startX = Math.random()*window.innerWidth;
+  dot.style.left = `${startX}px`;
+  // random tiny size
+  const size = 4 + Math.random()*8;
+  dot.style.width = dot.style.height = `${size}px`;
+  dot.style.top = `-20px`;
+  dot.style.opacity = 0.95;
+  dot.style.transition = `transform ${3 + Math.random()*3}s linear`;
+  document.body.appendChild(dot);
+
+  // compute target x with tiny sway
+  const sway = (Math.random()*160)-80;
+  const totalY = window.innerHeight + 40;
+  // use requestAnimationFrame based animation
+  const start = performance.now();
+  const duration = 3000 + Math.random()*4000;
+  function step(t){
+    const p = Math.min(1, (t - start) / duration);
+    const curX = startX + sway * p;
+    const curY = -20 + totalY * p;
+    dot.style.transform = `translate(${curX - startX}px, ${curY}px)`;
+    if (p < 1) requestAnimationFrame(step);
+    else {
+      // at bottom: transform into big snowflake briefly
+      const rect = dot.getBoundingClientRect();
+      const big = document.createElement('div');
+      big.className = 'bigflake';
+      big.textContent = '❄';
+      big.style.left = `${Math.max(8, Math.min(window.innerWidth-60, rect.left))}px`;
+      big.style.top = `${window.innerHeight - 110}px`;
+      document.body.appendChild(big);
+      setTimeout(()=> big.remove(), 900);
+      dot.remove();
+    }
+  }
+  requestAnimationFrame(step);
+}
+setInterval(spawnSnowDot, spawnRateMs);
+
+/* ================= DICE: 3D cubes with correct pips + orbit motion ================= */
+function makeDiceElement(elId){
+  const el = document.getElementById(elId);
+  // create a cube container
+  const cube = document.createElement('div');
+  cube.style.width = '100%'; cube.style.height = '100%';
+  cube.classList.add('cubeAnim');
+  el.appendChild(cube);
+
+  // helper to create face with pips html
+  function faceHtml(pips){
+    // pips is array of class names to place (e.g. ['tl','br'])
+    return pips.map(c => `<div class="pip ${c}"></div>`).join('');
+  }
+
+  // faces: we'll match standard layouts (mapped to earlier code)
+  const faces = [
+    { cls: 'front', html: faceHtml(['center']) }, // 1
+    { cls: 'back',  html: faceHtml(['tl','br']) }, // 2 (opposite)
+    { cls: 'right', html: faceHtml(['tl','center','br']) }, // 3
+    { cls: 'left',  html: faceHtml(['tl','tr','bl','br']) }, // 4
+    { cls: 'top',   html: faceHtml(['tl','tr','bl','br','center']) }, // 5
+    { cls: 'bottom',html: faceHtml(['tl','ml','bl','tr','mr','br']) } // 6
+  ];
+  faces.forEach(f=>{
+    const node = document.createElement('div');
+    node.className = `face ${f.cls}`;
+    node.innerHTML = f.html;
+    cube.appendChild(node);
+  });
+
+  return el;
+}
+
+const diceEls = ['dice1','dice2','dice3'].map(id => document.getElementById(id));
+diceEls.forEach(el => {
+  // set size from CSS variable
+  el.style.setProperty('--dice-size', '60px');
+  el.style.setProperty('--pip-size', '10px');
+  makeDiceElement(el);
+});
+
+// orbit each dice in its own radius
+const orbits = [
+  {el: diceEls[0], r: 140, speed: 40},
+  {el: diceEls[1], r: 200, speed: 26},
+  {el: diceEls[2], r: 260, speed: 18},
+];
+orbits.forEach(o => {
+  o.angle = Math.random()*360;
+  o.last = performance.now();
+  // initialize size (centered)
+  o.el.style.left = `${window.innerWidth/2 - 30}px`;
+  o.el.style.top  = `${window.innerHeight/2 - 30}px`;
+  (function step(t){
+    const dt = t - (o.last || t);
+    o.last = t;
+    o.angle += o.speed * (dt/1000);
+    const rad = o.angle * Math.PI/180;
+    const cx = window.innerWidth/2;
+    const cy = window.innerHeight/2;
+    const x = cx + o.r * Math.cos(rad) - parseFloat(getComputedStyle(o.el).width)/2;
+    const y = cy + o.r * Math.sin(rad) - parseFloat(getComputedStyle(o.el).height)/2;
+    o.el.style.left = `${x}px`;
+    o.el.style.top  = `${y}px`;
+    // small spin variation based on angle
+    const rotX = (o.angle*0.7)%360;
+    const rotY = (o.angle*1.3)%360;
+    o.el.querySelector('.cubeAnim').style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+    requestAnimationFrame(step);
+  })(performance.now());
+});
+
+/* ================= Language toggle (EN/VI) ================= */
+const langBtn = document.getElementById('langBtn');
+let lang = 'vi';
+langBtn.addEventListener('click', ()=>{
+  if(lang === 'vi'){
+    // switch to EN
+    document.getElementById('name').textContent = 'Pham Viet Anh';
+    document.getElementById('subtitle').textContent = 'Developer · Creative Coder · Casino Vibes';
+    document.getElementById('cvBtn').textContent = '📄 View Canva CV';
+    document.getElementById('contactBtn').textContent = '🌈 Contact';
+    langBtn.textContent = 'VI';
+    lang = 'en';
+  } else {
+    document.getElementById('name').textContent = 'Phạm Việt Anh';
+    document.getElementById('subtitle').textContent = 'Developer · Creative Coder · Casino Vibes';
+    document.getElementById('cvBtn').textContent = '📄 Xem CV Canva';
+    document.getElementById('contactBtn').textContent = '🌈 Liên hệ';
+    langBtn.textContent = 'EN';
+    lang = 'vi';
+  }
+});
+
+/* ================= Accessibility: clicking contact opens mail client ================= */
+// contactBtn is mailto already in HTML (works across clients)
+
+/* ======= Prevent heavy CPU on small screens: reduce spawn rate ======= */
+if (window.innerWidth < 600) {
+  // reduce snow density and visualizer resolution
+  // (leave as-is; visualizer already moderate)
+  // If you want to further reduce: adjust spawn interval below.
+}
+
+/* ========== Resize handling ========== */
+window.addEventListener('resize', ()=>{
+  resizeCanvas();
+});
+</script>
+
+</body>
+</html>
